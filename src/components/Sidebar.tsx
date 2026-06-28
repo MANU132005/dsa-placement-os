@@ -15,13 +15,17 @@ import {
   Settings, 
   FileText, 
   PenTool, 
-  Code
+  Code,
+  User,
+  LogOut
 } from 'lucide-react'
 import { useData } from '@/context/DataContext'
+import { useAuth } from '@/context/AuthContext'
 
 export const Sidebar: React.FC = () => {
   const pathname = usePathname()
-  const { problems, currentStreak } = useData()
+  const { problems } = useData()
+  const { user, logout } = useAuth()
 
   const solvedCount = problems.filter((p) => p.status !== null && p.status !== undefined).length
   const totalCount = 307
@@ -51,12 +55,12 @@ export const Sidebar: React.FC = () => {
             Placement OS
           </span>
           <span className="text-[10px] bg-accent text-accent-foreground px-1.5 py-0.5 rounded font-mono font-medium">
-            v3.0
+            v4.0
           </span>
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-1 overflow-y-auto max-h-[50vh] pr-1">
           {navItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.path
@@ -78,7 +82,7 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Progress & Streak Indicators */}
+      {/* User profile card & Solved Progress */}
       <div className="flex flex-col gap-4 border-t border-border pt-4 px-2">
         {/* Solved Progress */}
         <div className="flex flex-col gap-1.5">
@@ -94,20 +98,36 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* Streak Widget */}
-        <div className="flex items-center justify-between bg-secondary/50 rounded-lg p-2.5 border border-border/50">
-          <div className="flex items-center gap-2">
-            <Flame className="w-5 h-5 text-orange-500 fill-orange-500/20" />
-            <div className="flex flex-col">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                Current Streak
-              </span>
-              <span className="text-sm font-bold text-foreground">
-                {currentStreak} {currentStreak === 1 ? 'Day' : 'Days'}
-              </span>
-            </div>
+        {/* User Card */}
+        {user && (
+          <div className="flex items-center justify-between bg-secondary/40 border border-border/50 rounded-lg p-2 transition-all">
+            <Link 
+              href="/profile"
+              className="flex items-center gap-2 group cursor-pointer"
+            >
+              <img 
+                src={user.profilePhoto} 
+                alt={user.name} 
+                className="w-8 h-8 rounded-full border border-border/80 object-cover bg-secondary group-hover:opacity-80 transition-all"
+              />
+              <div className="flex flex-col truncate max-w-[110px]">
+                <span className="text-xs font-bold text-foreground group-hover:underline truncate">
+                  {user.name}
+                </span>
+                <span className="text-[10px] text-muted-foreground truncate">
+                  {user.currentYear}
+                </span>
+              </div>
+            </Link>
+            <button
+              onClick={logout}
+              title="Logout"
+              className="p-1.5 rounded-md text-muted-foreground hover:bg-secondary hover:text-red-500 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-        </div>
+        )}
       </div>
     </aside>
   )

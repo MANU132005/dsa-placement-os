@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import "./globals.css"
+import { AuthProvider } from "@/context/AuthContext"
 import { DataProvider } from "@/context/DataContext"
 import { Sidebar } from "@/components/Sidebar"
 
@@ -47,15 +48,23 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-background text-foreground flex transition-colors duration-200">
-        <DataProvider>
-          <Sidebar />
-          <main className="pl-64 flex-1 flex flex-col min-h-screen">
-            <div className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">
-              {children}
-            </div>
-          </main>
-        </DataProvider>
+        <AuthProvider>
+          <DataProvider>
+            {/* Main application router content guard */}
+            <AppLayoutShell>{children}</AppLayoutShell>
+          </DataProvider>
+        </AuthProvider>
       </body>
     </html>
+  )
+}
+
+// Internal client-wrapper to conditionally hide sidebar on the Login and Onboarding pages
+import ClientShellWrapper from "@/components/ClientShellWrapper"
+function AppLayoutShell({ children }: { children: React.ReactNode }) {
+  return (
+    <ClientShellWrapper>
+      {children}
+    </ClientShellWrapper>
   )
 }
