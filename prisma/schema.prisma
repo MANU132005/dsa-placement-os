@@ -1,0 +1,118 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  currentStreak   Int      @default(0)
+  longestStreak   Int      @default(0)
+  targetCompanies String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Problem {
+  id               Int       @id
+  name             String    @unique
+  topic            String
+  pattern          String
+  difficulty       String
+  expectedTime     Int
+  roi              Int
+  campusFrequency  Int
+  companyFrequency Int
+  clues            String    @default("")
+  mistakes         String    @default("")
+  timeComplexity   String    @default("")
+  spaceComplexity  String    @default("")
+  companyTags      String    @default("")
+  striverLink      String    @default("")
+  leetcodeLink     String    @default("")
+  gfgLink          String    @default("")
+  youtubeLink      String    @default("")
+  
+  // User tracking fields
+  attemptDate      DateTime?
+  timeTaken        Int?
+  hintUsed         String?
+  confidence       Int?
+  status           String?   // "Green", "Yellow", "Red", or null (Unsolved)
+  revisionCount    Int       @default(0)
+  nextRevision     DateTime?
+  notes            String?
+}
+
+model Pattern {
+  id                     Int      @id @default(autoincrement())
+  name                   String   @unique
+  clues                  String
+  whenToUse              String
+  whenNotToUse           String
+  commonMistakes         String
+  timeComplexity         String
+  spaceComplexity        String
+  representativeProblems String
+  topQuestions           String
+  roi                    Int
+  frequency              Int
+  difficulty             String
+}
+
+model MistakeLog {
+  id          String    @id @default(uuid())
+  problemId   Int
+  problemName String
+  mistakeType String
+  rootCause   String
+  solution    String
+  reviewed    String    @default("No") // "Yes", "No"
+  reviewDate  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model MockOA {
+  id             String   @id @default(uuid())
+  company        String
+  date             DateTime
+  questions      Int
+  score          Float
+  time           Int
+  accuracy       Float
+  weakPattern    String?
+  runningAverage Float?
+  mistakes       String?
+  action         String?
+  createdAt      DateTime @default(now())
+}
+
+model CSTopic {
+  id           String    @id @default(uuid())
+  topicName    String    @unique
+  resourceLink String
+  status       String    @default("Not Started") // "Not Started", "In Progress", "Completed"
+  lastRevised  DateTime?
+  nextRevision DateTime?
+  confidence   Int?
+}
+
+model InterviewJournal {
+  id               String   @id @default(uuid())
+  company          String
+  date             DateTime
+  round            String
+  questions        String
+  difficulty       String
+  mistakes         String?
+  feedback         String?
+  learnings        String?
+  revisionRequired String   @default("No") // "Yes", "No"
+  createdAt        DateTime @default(now())
+}
