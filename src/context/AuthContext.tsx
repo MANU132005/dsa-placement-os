@@ -108,13 +108,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setUser(profile)
         localStorage.setItem('dsa_user', JSON.stringify(profile))
-        router.push('/dashboard')
+        if (profile.isOnboarded) {
+          router.push('/dashboard')
+        } else {
+          router.push('/onboarding')
+        }
       } else {
         // Fallback simulated authentication for local development when DB is unconfigured
         if (res.error?.includes('failed') || res.error?.includes('offline')) {
           // Offline local mode fallback
           const mockUser: UserProfile = {
-            id: 'local-guest-id',
+            id: `${email.split('@')[0]}-guest`,
             name: email.split('@')[0],
             email,
             profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
