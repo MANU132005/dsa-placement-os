@@ -10,18 +10,19 @@ datasource db {
 }
 
 model User {
-  id              String   @id @default(uuid())
-  email           String   @unique
-  currentStreak   Int      @default(0)
-  longestStreak   Int      @default(0)
-  targetCompanies String[] @default([])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  dailyGoal    Int      @default(10)
+  currentYear  String   @default("3rd Year")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Problem {
-  id               Int       @id
-  name             String    @unique
+  id               Int    @id
+  name             String @unique
   topic            String
   pattern          String
   difficulty       String
@@ -29,30 +30,36 @@ model Problem {
   roi              Int
   campusFrequency  Int
   companyFrequency Int
-  clues            String    @default("")
-  mistakes         String    @default("")
-  timeComplexity   String    @default("")
-  spaceComplexity  String    @default("")
-  companyTags      String    @default("")
-  striverLink      String    @default("")
-  leetcodeLink     String    @default("")
-  gfgLink          String    @default("")
-  youtubeLink      String    @default("")
-  
-  // User tracking fields
-  attemptDate      DateTime?
-  timeTaken        Int?
-  hintUsed         String?
-  confidence       Int?
-  status           String?   // "Green", "Yellow", "Red", or null (Unsolved)
-  revisionCount    Int       @default(0)
-  nextRevision     DateTime?
-  notes            String?
+  clues            String @default("")
+  mistakes         String @default("")
+  timeComplexity   String @default("")
+  spaceComplexity  String @default("")
+  companyTags      String @default("")
+  striverLink      String @default("")
+  leetcodeLink     String @default("")
+  gfgLink          String @default("")
+  youtubeLink      String @default("")
+}
+
+model UserProgress {
+  id            String    @id @default(uuid())
+  userId        String
+  problemId     Int
+  status        String? // "Green", "Yellow", "Red"
+  confidence    Int?
+  timeTaken     Int?
+  hintUsed      String?
+  solveDate     DateTime?
+  nextRevision  DateTime?
+  revisionCount Int       @default(0)
+  notes         String?
+
+  @@unique([userId, problemId])
 }
 
 model Pattern {
-  id                     Int      @id @default(autoincrement())
-  name                   String   @unique
+  id                     Int    @id @default(autoincrement())
+  name                   String @unique
   clues                  String
   whenToUse              String
   whenNotToUse           String
@@ -68,6 +75,7 @@ model Pattern {
 
 model MistakeLog {
   id          String    @id @default(uuid())
+  userId      String
   problemId   Int
   problemName String
   mistakeType String
@@ -80,8 +88,9 @@ model MistakeLog {
 
 model MockOA {
   id             String   @id @default(uuid())
+  userId         String
   company        String
-  date             DateTime
+  date           DateTime
   questions      Int
   score          Float
   time           Int
@@ -93,18 +102,22 @@ model MockOA {
   createdAt      DateTime @default(now())
 }
 
-model CSTopic {
+model CSTopicProgress {
   id           String    @id @default(uuid())
-  topicName    String    @unique
+  userId       String
+  topicName    String
   resourceLink String
   status       String    @default("Not Started") // "Not Started", "In Progress", "Completed"
   lastRevised  DateTime?
   nextRevision DateTime?
   confidence   Int?
+
+  @@unique([userId, topicName])
 }
 
 model InterviewJournal {
   id               String   @id @default(uuid())
+  userId           String
   company          String
   date             DateTime
   round            String
@@ -115,4 +128,13 @@ model InterviewJournal {
   learnings        String?
   revisionRequired String   @default("No") // "Yes", "No"
   createdAt        DateTime @default(now())
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

@@ -2,6 +2,16 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { initialProblems, initialPatterns, initialCSTopics, Problem, Pattern, CSTopic } from '@/lib/seedData'
+import { useAuth } from '@/context/AuthContext'
+import { 
+  fetchUserProgressAction, 
+  saveAttemptAction, 
+  addMistakeAction, 
+  toggleMistakeAction, 
+  addMockOAAction, 
+  updateCSTopicAction, 
+  addInterviewAction 
+} from '@/app/actions/progressActions'
 
 export interface MistakeLog {
   id: string;
@@ -20,9 +30,9 @@ export interface MockOA {
   company: string;
   date: string;
   questions: number;
-  score: number; // e.g. 0 to 100
-  time: number; // mins
-  accuracy: number; // e.g. 0 to 100
+  score: number;
+  time: number;
+  accuracy: number;
   weakPattern?: string;
   runningAverage?: number;
   mistakes?: string;
@@ -54,6 +64,7 @@ interface DataContextType {
   currentStreak: number
   longestStreak: number
   targetCompanies: string[]
+  isSyncing: boolean
   logAttempt: (
     problemId: number,
     timeTaken: number,
@@ -94,6 +105,8 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined)
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth()
+  
   const [problems, setProblems] = useState<Problem[]>([])
   const [patterns, setPatterns] = useState<Pattern[]>([])
   const [csTopics, setCsTopics] = useState<CSTopic[]>([])
@@ -105,81 +118,194 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [targetCompanies, setTargetCompaniesState] = useState<string[]>([
     "Accenture", "Infosys", "Capgemini", "Cognizant", "Deloitte", "EY", "Oracle", "JPMC", "LTIMindtree", "Virtusa"
   ])
+  const [isSyncing, setIsSyncing] = useState(false)
 
-  // Load from localstorage on mount
+  // Fetch or Load User Isolated Data when User changes
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedProbs = localStorage.getItem('dsa_problems')
-      const storedPats = localStorage.getItem('dsa_patterns')
-      const storedCS = localStorage.getItem('dsa_cs_topics')
-      const storedMocks = localStorage.getItem('dsa_mock_oas')
-      const storedMistakes = localStorage.getItem('dsa_mistakes')
-      const storedJournals = localStorage.getItem('dsa_journals')
-      const storedCurrStrk = localStorage.getItem('dsa_curr_streak')
-      const storedLongStrk = localStorage.getItem('dsa_long_streak')
-      const storedTargets = localStorage.getItem('dsa_target_companies')
-
-      if (storedProbs) setProblems(JSON.parse(storedProbs))
-      else {
-        localStorage.setItem('dsa_problems', JSON.stringify(initialProblems))
-        setProblems(initialProblems)
-      }
-
-      if (storedPats) setPatterns(JSON.parse(storedPats))
-      else {
-        localStorage.setItem('dsa_patterns', JSON.stringify(initialPatterns))
-        setPatterns(initialPatterns)
-      }
-
-      if (storedCS) setCsTopics(JSON.parse(storedCS))
-      else {
-        localStorage.setItem('dsa_cs_topics', JSON.stringify(initialCSTopics))
-        setCsTopics(initialCSTopics)
-      }
-
-      if (storedMocks) setMockOAs(JSON.parse(storedMocks))
-      if (storedMistakes) setMistakeLogs(JSON.parse(storedMistakes))
-      if (storedJournals) setInterviewJournals(JSON.parse(storedJournals))
-      
-      if (storedCurrStrk) setCurrentStreak(parseInt(storedCurrStrk))
-      if (storedLongStrk) setLongestStreak(parseInt(storedLongStrk))
-      if (storedTargets) setTargetCompaniesState(JSON.parse(storedTargets))
+    if (!user) {
+      // Clear data state on logout
+      setProblems([])
+      setCsTopics([])
+      setMockOAs([])
+      setMistakeLogs([])
+      setInterviewJournals([])
+      setCurrentStreak(0)
+      setLongestStreak(0)
+      return
     }
-  }, [])
 
-  // Sync to localstorage helpers
-  const saveProblems = (data: Problem[]) => {
+    async function loadUserData() {
+      setIsSyncing(true)
+      try {
+        const res = await fetchUserProgressAction(user.id)
+        if (res.success && res.data) {
+          const { progress, mistakes, mockOAs: oas, csProgress, interviewJournals: journals, notes } = res.data
+
+          // 1. Merge Shared Problems with User Progress
+          const progressMap = new Map(progress.map((p: any) => [p.problemId, p]))
+          const mergedProblems = initialProblems.map((prob) => {
+            const prog: any = progressMap.get(prob.id)
+            if (prog) {
+              return {
+                ...prob,
+                status: prog.status,
+                confidence: prog.confidence,
+                timeTaken: prog.timeTaken,
+                hintUsed: prog.hintUsed,
+                attemptDate: prog.solveDate ? new Date(prog.solveDate).toISOString().split('T')[0] : null,
+                nextRevision: prog.nextRevision ? new Date(prog.nextRevision).toISOString().split('T')[0] : null,
+                revisionCount: prog.revisionCount || 0,
+                notes: prog.notes,
+              }
+            }
+            return prob
+          })
+          setProblems(mergedProblems)
+
+          // 2. Load mistakes
+          setMistakeLogs(mistakes.map((m: any) => ({
+            id: m.id,
+            problemId: m.problemId,
+            problemName: m.problemName,
+            mistakeType: m.mistakeType,
+            rootCause: m.rootCause,
+            solution: m.solution,
+            reviewed: m.reviewed,
+            reviewDate: m.reviewDate ? new Date(m.reviewDate).toISOString().split('T')[0] : null,
+            createdAt: m.createdAt.toISOString()
+          })))
+
+          // 3. Load Mock OAs
+          setMockOAs(oas.map((o: any) => ({
+            id: o.id,
+            company: o.company,
+            date: o.date ? new Date(o.date).toISOString().split('T')[0] : '',
+            questions: o.questions,
+            score: o.score,
+            time: o.time,
+            accuracy: o.accuracy,
+            weakPattern: o.weakPattern || 'None',
+            runningAverage: o.runningAverage || 0,
+            mistakes: o.mistakes || '',
+            action: o.action || '',
+            createdAt: o.createdAt.toISOString()
+          })))
+
+          // 4. Load CS Progress
+          const csMap = new Map(csProgress.map((c: any) => [c.topicName, c]))
+          setCsTopics(initialCSTopics.map((topic) => {
+            const prog: any = csMap.get(topic.topicName)
+            if (prog) {
+              return {
+                ...topic,
+                status: prog.status,
+                confidence: prog.confidence,
+                lastRevised: prog.lastRevised ? new Date(prog.lastRevised).toISOString().split('T')[0] : null,
+                nextRevision: prog.nextRevision ? new Date(prog.nextRevision).toISOString().split('T')[0] : null,
+              }
+            }
+            return topic
+          }))
+
+          // 5. Load Interviews
+          setInterviewJournals(journals.map((j: any) => ({
+            id: j.id,
+            company: j.company,
+            date: j.date ? new Date(j.date).toISOString().split('T')[0] : '',
+            round: j.round,
+            questions: j.questions,
+            difficulty: j.difficulty,
+            mistakes: j.mistakes || '',
+            feedback: j.feedback || '',
+            learnings: j.learnings || '',
+            revisionRequired: j.revisionRequired,
+            createdAt: j.createdAt.toISOString()
+          })))
+
+          // Set patterns reference
+          setPatterns(initialPatterns)
+
+          // Load streaks (calculated on-the-fly from actual attempts or mock saved)
+          const storedCurrStrk = localStorage.getItem(`dsa_${user.id}_curr_streak`)
+          const storedLongStrk = localStorage.getItem(`dsa_${user.id}_long_streak`)
+          if (storedCurrStrk) setCurrentStreak(parseInt(storedCurrStrk))
+          if (storedLongStrk) setLongestStreak(parseInt(storedLongStrk))
+
+          // Load target companies
+          const storedTargets = localStorage.getItem(`dsa_${user.id}_target_companies`)
+          if (storedTargets) setTargetCompaniesState(JSON.parse(storedTargets))
+        } else {
+          // DATABASE OFFLINE FALLBACK: load user isolated namespace local storage
+          loadLocalFallback(user.id)
+        }
+      } catch (err) {
+        console.error('Fetch user progress error:', err)
+        loadLocalFallback(user.id)
+      } finally {
+        setIsSyncing(false)
+      }
+    }
+
+    loadUserData()
+  }, [user])
+
+  // Offline local fallback loader
+  const loadLocalFallback = (uid: string) => {
+    const storedProbs = localStorage.getItem(`dsa_${uid}_problems`)
+    const storedCS = localStorage.getItem(`dsa_${uid}_cs_topics`)
+    const storedMocks = localStorage.getItem(`dsa_${uid}_mock_oas`)
+    const storedMistakes = localStorage.getItem(`dsa_${uid}_mistakes`)
+    const storedJournals = localStorage.getItem(`dsa_${uid}_journals`)
+    const storedCurrStrk = localStorage.getItem(`dsa_${uid}_curr_streak`)
+    const storedLongStrk = localStorage.getItem(`dsa_${uid}_long_streak`)
+    const storedTargets = localStorage.getItem(`dsa_${uid}_target_companies`)
+
+    setProblems(storedProbs ? JSON.parse(storedProbs) : initialProblems)
+    setPatterns(initialPatterns)
+    setCsTopics(storedCS ? JSON.parse(storedCS) : initialCSTopics)
+    setMockOAs(storedMocks ? JSON.parse(storedMocks) : [])
+    setMistakeLogs(storedMistakes ? JSON.parse(storedMistakes) : [])
+    setInterviewJournals(storedJournals ? JSON.parse(storedJournals) : [])
+    setCurrentStreak(storedCurrStrk ? parseInt(storedCurrStrk) : 0)
+    setLongestStreak(storedLongStrk ? parseInt(storedLongStrk) : 0)
+    
+    if (storedTargets) setTargetCompaniesState(JSON.parse(storedTargets))
+  }
+
+  // Local sync triggers
+  const saveProblemsLocally = (uid: string, data: Problem[]) => {
     setProblems(data)
-    localStorage.setItem('dsa_problems', JSON.stringify(data))
+    localStorage.setItem(`dsa_${uid}_problems`, JSON.stringify(data))
   }
 
-  const saveMockOAs = (data: MockOA[]) => {
+  const saveMockOAsLocally = (uid: string, data: MockOA[]) => {
     setMockOAs(data)
-    localStorage.setItem('dsa_mock_oas', JSON.stringify(data))
+    localStorage.setItem(`dsa_${uid}_mock_oas`, JSON.stringify(data))
   }
 
-  const saveMistakes = (data: MistakeLog[]) => {
+  const saveMistakesLocally = (uid: string, data: MistakeLog[]) => {
     setMistakeLogs(data)
-    localStorage.setItem('dsa_mistakes', JSON.stringify(data))
+    localStorage.setItem(`dsa_${uid}_mistakes`, JSON.stringify(data))
   }
 
-  const saveJournals = (data: InterviewJournal[]) => {
+  const saveJournalsLocally = (uid: string, data: InterviewJournal[]) => {
     setInterviewJournals(data)
-    localStorage.setItem('dsa_journals', JSON.stringify(data))
+    localStorage.setItem(`dsa_${uid}_journals`, JSON.stringify(data))
   }
 
-  const saveCSTopics = (data: CSTopic[]) => {
+  const saveCSTopicsLocally = (uid: string, data: CSTopic[]) => {
     setCsTopics(data)
-    localStorage.setItem('dsa_cs_topics', JSON.stringify(data))
+    localStorage.setItem(`dsa_${uid}_cs_topics`, JSON.stringify(data))
   }
 
   const setTargetCompanies = (data: string[]) => {
+    if (!user) return
     setTargetCompaniesState(data)
-    localStorage.setItem('dsa_target_companies', JSON.stringify(data))
+    localStorage.setItem(`dsa_${user.id}_target_companies`, JSON.stringify(data))
   }
 
-  // 1. Log Problem Attempt (with streak updates and Spaced Repetition scheduling)
-  const logAttempt = (
+  // 1. Log Attempt Auto-Save
+  const logAttempt = async (
     problemId: number,
     timeTaken: number,
     hintUsed: string,
@@ -187,9 +313,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     status: string,
     notes: string
   ) => {
+    if (!user) return
+    setIsSyncing(true)
+    
     const todayStr = new Date().toISOString().split('T')[0]
     
-    // Spaced repetition scheduling
+    // Spaced Repetition delta
     let daysToAdd = 30
     if (status === 'Yellow') daysToAdd = 7
     if (status === 'Red') daysToAdd = 2
@@ -198,6 +327,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     nextRevDate.setDate(nextRevDate.getDate() + daysToAdd)
     const nextRevStr = nextRevDate.toISOString().split('T')[0]
 
+    // Local state merge
     const updated = problems.map((prob) => {
       if (prob.id === problemId) {
         const prevAttempt = prob.attemptDate
@@ -216,9 +346,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return prob
     })
 
-    saveProblems(updated)
+    // 1. Update server database
+    try {
+      await saveAttemptAction(user.id, problemId, status, confidence, timeTaken, hintUsed, notes, nextRevStr)
+    } catch (err) {
+      console.warn('Server progress write offline. Syncing locally.')
+    }
 
-    // Handle streak tracker
+    // 2. Save locally
+    saveProblemsLocally(user.id, updated)
+
+    // Streak logic
     const alreadySolvedToday = problems.some(
       (p) => p.attemptDate === todayStr && p.id !== problemId
     )
@@ -231,22 +369,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nextStreak = currentStreak + 1
       }
       setCurrentStreak(nextStreak)
-      localStorage.setItem('dsa_curr_streak', nextStreak.toString())
+      localStorage.setItem(`dsa_${user.id}_curr_streak`, nextStreak.toString())
 
       if (nextStreak > longestStreak) {
         setLongestStreak(nextStreak)
-        localStorage.setItem('dsa_long_streak', nextStreak.toString())
+        localStorage.setItem(`dsa_${user.id}_long_streak`, nextStreak.toString())
       }
     }
+    
+    setIsSyncing(false)
   }
 
-  // 2. Add Mistake Log
-  const addMistakeLog = (
+  // 2. Add Mistake Auto-Save
+  const addMistakeLog = async (
     problemId: number,
     mistakeType: string,
     rootCause: string,
     solution: string
   ) => {
+    if (!user) return
+    setIsSyncing(true)
+
     const problemName = problems.find((p) => p.id === problemId)?.name || 'Unknown Problem'
     const newLog: MistakeLog = {
       id: crypto.randomUUID(),
@@ -258,27 +401,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       reviewed: 'No',
       createdAt: new Date().toISOString(),
     }
-    saveMistakes([newLog, ...mistakeLogs])
+
+    // 1. Write server db
+    try {
+      const res = await addMistakeAction(user.id, problemId, problemName, mistakeType, rootCause, solution)
+      if (res.success && res.data) {
+        newLog.id = res.data.id // bind real database id
+      }
+    } catch (err) {
+      console.warn('Mistakes write offline.')
+    }
+
+    // 2. Write locally
+    saveMistakesLocally(user.id, [newLog, ...mistakeLogs])
+    setIsSyncing(false)
   }
 
-  // 3. Toggle Mistake Reviewed status
-  const toggleMistakeReviewed = (id: string) => {
+  // 3. Toggle Mistake Auto-Save
+  const toggleMistakeReviewed = async (id: string) => {
+    if (!user) return
+    setIsSyncing(true)
+
     const updated = mistakeLogs.map((log) => {
       if (log.id === id) {
         const nextStatus = log.reviewed === 'Yes' ? 'No' : 'Yes'
+        const nextDate = nextStatus === 'Yes' ? new Date().toISOString().split('T')[0] : null
+        
+        // Write server db async
+        toggleMistakeAction(user.id, id, nextStatus, nextDate).catch(() => {})
+        
         return {
           ...log,
           reviewed: nextStatus,
-          reviewDate: nextStatus === 'Yes' ? new Date().toISOString().split('T')[0] : null,
+          reviewDate: nextDate,
         }
       }
       return log
     })
-    saveMistakes(updated)
+
+    saveMistakesLocally(user.id, updated)
+    setIsSyncing(false)
   }
 
-  // 4. Log Mock OA Performance
-  const addMockOA = (
+  // 4. Log Mock OA Auto-Save
+  const addMockOA = async (
     company: string,
     date: string,
     questions: number,
@@ -289,7 +455,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     mistakes: string,
     action: string
   ) => {
-    // Calculate running average score
+    if (!user) return
+    setIsSyncing(true)
+
     const totalScores = mockOAs.reduce((sum, item) => sum + item.score, 0) + score
     const runningAverage = parseFloat((totalScores / (mockOAs.length + 1)).toFixed(1))
 
@@ -307,20 +475,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       action,
       createdAt: new Date().toISOString(),
     }
-    saveMockOAs([newOA, ...mockOAs])
+
+    // 1. Server db write
+    try {
+      const res = await addMockOAAction(
+        user.id, company, date, questions, score, time, accuracy, weakPattern, runningAverage, mistakes, action
+      )
+      if (res.success && res.data) {
+        newOA.id = res.data.id
+      }
+    } catch (err) {
+      console.warn('OAs write offline.')
+    }
+
+    // 2. Save locally
+    saveMockOAsLocally(user.id, [newOA, ...mockOAs])
+    setIsSyncing(false)
   }
 
-  // 5. Update CS Topic revision status
-  const updateCSTopic = (topicName: string, status: string, confidence: number) => {
+  // 5. CS Topics Auto-Save
+  const updateCSTopic = async (topicName: string, status: string, confidence: number) => {
+    if (!user) return
+    setIsSyncing(true)
+
     const todayStr = new Date().toISOString().split('T')[0]
-    
-    // Custom revision scheduling (30 days interval)
     const nextRevDate = new Date()
     nextRevDate.setDate(nextRevDate.getDate() + 30)
     const nextRevStr = nextRevDate.toISOString().split('T')[0]
 
     const updated = csTopics.map((topic) => {
       if (topic.topicName === topicName) {
+        // Server db write
+        updateCSTopicAction(user.id, topicName, topic.resourceLink, status, confidence, nextRevStr).catch(() => {})
+
         return {
           ...topic,
           status,
@@ -331,11 +518,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return topic
     })
-    saveCSTopics(updated)
+
+    saveCSTopicsLocally(user.id, updated)
+    setIsSyncing(false)
   }
 
-  // 6. Log Interview Journal Round
-  const addInterviewJournal = (
+  // 6. Interview rounds Auto-Save
+  const addInterviewJournal = async (
     company: string,
     date: string,
     round: string,
@@ -346,6 +535,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     learnings: string,
     revisionRequired: string
   ) => {
+    if (!user) return
+    setIsSyncing(true)
+
     const newJournal: InterviewJournal = {
       id: crypto.randomUUID(),
       company,
@@ -359,19 +551,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       revisionRequired,
       createdAt: new Date().toISOString(),
     }
-    saveJournals([newJournal, ...interviewJournals])
+
+    // 1. Server db write
+    try {
+      const res = await addInterviewAction(
+        user.id, company, date, round, questions, difficulty, mistakes, feedback, learnings, revisionRequired
+      )
+      if (res.success && res.data) {
+        newJournal.id = res.data.id
+      }
+    } catch (err) {
+      console.warn('Interviews write offline.')
+    }
+
+    // 2. Save locally
+    saveJournalsLocally(user.id, [newJournal, ...interviewJournals])
+    setIsSyncing(false)
   }
 
-  // 7. Reset Data to initial workbook seed
+  // 7. Reset User Specific Data
   const resetAllData = () => {
-    localStorage.setItem('dsa_problems', JSON.stringify(initialProblems))
-    localStorage.setItem('dsa_patterns', JSON.stringify(initialPatterns))
-    localStorage.setItem('dsa_cs_topics', JSON.stringify(initialCSTopics))
-    localStorage.removeItem('dsa_mock_oas')
-    localStorage.removeItem('dsa_mistakes')
-    localStorage.removeItem('dsa_journals')
-    localStorage.setItem('dsa_curr_streak', '0')
-    localStorage.setItem('dsa_long_streak', '0')
+    if (!user) return
+    
+    // Clear user isolated keys
+    localStorage.removeItem(`dsa_${user.id}_problems`)
+    localStorage.removeItem(`dsa_${user.id}_cs_topics`)
+    localStorage.removeItem(`dsa_${user.id}_mock_oas`)
+    localStorage.removeItem(`dsa_${user.id}_mistakes`)
+    localStorage.removeItem(`dsa_${user.id}_journals`)
+    localStorage.setItem(`dsa_${user.id}_curr_streak`, '0')
+    localStorage.setItem(`dsa_${user.id}_long_streak`, '0')
 
     setProblems(initialProblems)
     setPatterns(initialPatterns)
@@ -395,6 +604,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentStreak,
         longestStreak,
         targetCompanies,
+        isSyncing,
         logAttempt,
         addMistakeLog,
         toggleMistakeReviewed,

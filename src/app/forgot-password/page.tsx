@@ -3,30 +3,48 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/context/AuthContext'
+import { resetPasswordAction } from '@/app/actions/authActions'
 import { Mail, Lock, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
-export default function LoginPage() {
-  const { login } = useAuth()
+export default function ForgotPasswordPage() {
   const router = useRouter()
-  
+
   // Form State
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rememberMe, setRememberMe] = useState(false)
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!email || !password) return
+    if (!email || !password || !confirmPassword) return
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long.')
+      return
+    }
+
     setError('')
     setIsSubmitting(true)
+
     try {
-      await login(email, password, rememberMe)
-    } catch (err: any) {
-      setError(err.message || 'Invalid email or password.')
+      const res = await resetPasswordAction({ email, password, confirmPassword })
+      if (res.success) {
+        setSuccess(true)
+        setTimeout(() => {
+          router.push('/login')
+        }, 1500)
+      } else {
+        setError(res.error || 'Password reset failed.')
+      }
+    } catch (err) {
+      setError('Connection failed. Please try again.')
     } finally {
       setIsSubmitting(false)
     }
@@ -38,7 +56,7 @@ export default function LoginPage() {
       {/* Background Glow */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-transparent to-transparent -z-10 pointer-events-none" />
 
-      {/* Login Card */}
+      {/* Reset Card */}
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -54,17 +72,22 @@ export default function LoginPage() {
             </span>
           </div>
           <h2 className="text-xl font-bold text-foreground mt-2">
-            Welcome back
+            Reset your password
           </h2>
           <p className="text-xs text-muted-foreground">
-            Sign in to access your isolated placement workstation
+            Provide your account email and specify a new secure password
           </p>
         </div>
 
-        {/* Error message */}
+        {/* Error/Success messages */}
         {error && (
           <div className="text-xs font-semibold text-red-500 bg-red-500/5 border border-red-500/10 rounded-lg p-3 text-center animate-fade-in">
             {error}
+          </div>
+        )}
+        {success && (
+          <div className="text-xs font-semibold text-emerald-600 bg-emerald-500/5 border border-emerald-500/10 rounded-lg p-3 text-center animate-fade-in">
+            Password reset successful! Redirecting to login...
           </div>
         )}
 
@@ -73,7 +96,7 @@ export default function LoginPage() {
           
           {/* Email */}
           <div className="flex flex-col gap-1.5">
-            <label className="font-bold text-muted-foreground uppercase tracking-wider">Email address</label>
+            <label className="font-bold text-muted-foreground uppercase tracking-wider">Account Email</label>
             <div className="relative">
               <Mail className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
               <input
@@ -87,23 +110,15 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Password */}
+          {/* New Password */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex justify-between items-center">
-              <label className="font-bold text-muted-foreground uppercase tracking-wider">Password</label>
-              <Link 
-                href="/forgot-password" 
-                className="font-semibold text-[10px] text-primary hover:underline"
-              >
-                Forgot Password?
-              </Link>
-            </div>
+            <label className="font-bold text-muted-foreground uppercase tracking-wider">New Password</label>
             <div className="relative">
               <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
               <input
                 type="password"
                 required
-                placeholder="••••••••"
+                placeholder="Minimum 6 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-secondary/30 border border-border rounded-lg pl-9 pr-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
@@ -111,36 +126,40 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Remember Me */}
-          <label className="flex items-center gap-2 font-semibold text-muted-foreground cursor-pointer select-none py-1">
-            <input
-              type="checkbox"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              className="rounded border-border text-primary focus:ring-0 focus:outline-none w-3.5 h-3.5"
-            />
-            <span>Remember Me (keep me logged in)</span>
-          </label>
+          {/* Confirm New Password */}
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-muted-foreground uppercase tracking-wider">Confirm New Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground/60" />
+              <input
+                type="password"
+                required
+                placeholder="Repeat new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full bg-secondary/30 border border-border rounded-lg pl-9 pr-4 py-2.5 text-foreground focus:outline-none focus:border-primary"
+              />
+            </div>
+          </div>
 
           {/* Submit */}
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="flex items-center justify-center gap-2 w-full py-2.5 bg-primary text-primary-foreground font-bold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition-all mt-1"
+            disabled={isSubmitting || success}
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-primary text-primary-foreground font-bold rounded-lg shadow hover:opacity-95 disabled:opacity-50 transition-all mt-2"
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <span>Sign in</span>
+              <span>Reset Password</span>
             )}
           </button>
         </form>
 
-        {/* Footer Toggle */}
+        {/* Footer Link */}
         <div className="text-center text-xs mt-1">
-          <span className="text-muted-foreground">Don't have an account? </span>
-          <Link href="/signup" className="font-bold text-primary hover:underline">
-            Sign Up
+          <Link href="/login" className="font-bold text-primary hover:underline">
+            Back to Login
           </Link>
         </div>
 

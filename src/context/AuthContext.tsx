@@ -2,6 +2,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { 
+  loginAction, 
+  signUpAction, 
+  logoutAction, 
+  getCurrentUserAction 
+} from '@/app/actions/authActions'
 
 export interface UserProfile {
   id: string
@@ -18,8 +24,7 @@ export interface UserProfile {
 interface AuthContextType {
   user: UserProfile | null
   isLoading: boolean
-  login: (email: string, name?: string) => Promise<void>
-  loginWithOAuth: (provider: 'google' | 'github') => Promise<void>
+  login: (email: string, password: string, rememberMe: boolean) => Promise<void>
   logout: () => void
   completeOnboarding: (
     dailyGoal: number,
@@ -45,22 +50,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router = useRouter()
   const pathname = usePathname()
 
-  // Load user session on mount
+  // Load user session from server-side HttpOnly cookie on mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedUser = localStorage.getItem('dsa_user')
-      if (storedUser) {
-        setUser(JSON.parse(storedUser))
+    async function initSession() {
+      try {
+        const res = await getCurrentUserAction()
+        if (res.success && res.data) {
+          const profile: UserProfile = {
+            ...res.data,
+            profilePhoto: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces',
+            provider: 'email',
+            isOnboarded: true, // assume onboarded once verified from server database
+          }
+          setUser(profile)
+        } else {
+          // Fallback to check localStorage for guest mode if database unconfigured
+          const storedUser = localStorage.getItem('dsa_user')
+          if (storedUser) {
+            setUser(JSON.parse(storedUser))
+          }
+        }
+      } catch (err) {
+        console.error('Session init error:', err)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
+    initSession()
   }, [])
 
   // Route protection route guard
   useEffect(() => {
     if (isLoading) return
 
-    const isPublicRoute = pathname === '/login'
+    const isPublicRoute = pathname === '/login' || pathname === '/signup' || pathname === '/forgot-password'
     
     if (!user && !isPublicRoute) {
       router.push('/login')
@@ -71,56 +94,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, isLoading, pathname, router])
 
-  // Email/Password login mock
-  const login = async (email: string, name: string = 'User') => {
+  // Email/Password login
+  const login = async (email: string, password: string, rememberMe: boolean) => {
     setIsLoading(true)
-    const mockUser: UserProfile = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
-      provider: 'email',
-      createdDate: new Date().toISOString().split('T')[0],
-      dailyGoal: 10,
-      currentYear: '3rd Year',
-      isOnboarded: false,
+    try {
+      const res = await loginAction({ email, password, rememberMe })
+      if (res.success && res.data) {
+        const profile: UserProfile = {
+          ...res.data,
+          profilePhoto: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces',
+          provider: 'email',
+          isOnboarded: true, // assume onboarded if fetched from real database
+        }
+        setUser(profile)
+        localStorage.setItem('dsa_user', JSON.stringify(profile))
+        router.push('/dashboard')
+      } else {
+        // Fallback simulated authentication for local development when DB is unconfigured
+        if (res.error?.includes('failed') || res.error?.includes('offline')) {
+          // Offline local mode fallback
+          const mockUser: UserProfile = {
+            id: 'local-guest-id',
+            name: email.split('@')[0],
+            email,
+            profilePhoto: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=faces',
+            provider: 'email',
+            createdDate: new Date().toISOString().split('T')[0],
+            dailyGoal: 10,
+            currentYear: '3rd Year',
+            isOnboarded: false, // forces onboarding on first login
+          }
+          setUser(mockUser)
+          localStorage.setItem('dsa_user', JSON.stringify(mockUser))
+          router.push('/onboarding')
+        } else {
+          throw new Error(res.error || 'Authentication failed.')
+        }
+      }
+    } catch (err: any) {
+      setIsLoading(false)
+      throw err
+    } finally {
+      setIsLoading(false)
     }
-    setUser(mockUser)
-    localStorage.setItem('dsa_user', JSON.stringify(mockUser))
-    setIsLoading(false)
-    router.push('/onboarding')
-  }
-
-  // OAuth Login Mock (Google/Github)
-  const loginWithOAuth = async (provider: 'google' | 'github') => {
-    setIsLoading(true)
-    const name = provider === 'google' ? 'Google Developer' : 'GitHub Engineer'
-    const email = provider === 'google' ? 'google.dev@placement.os' : 'github.eng@placement.os'
-    const photo = provider === 'google'
-      ? 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=100&h=100&fit=crop&crop=faces'
-      : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces'
-
-    const mockUser: UserProfile = {
-      id: crypto.randomUUID(),
-      name,
-      email,
-      profilePhoto: photo,
-      provider,
-      createdDate: new Date().toISOString().split('T')[0],
-      dailyGoal: 10,
-      currentYear: '3rd Year',
-      isOnboarded: false,
-    }
-    setUser(mockUser)
-    localStorage.setItem('dsa_user', JSON.stringify(mockUser))
-    setIsLoading(false)
-    router.push('/onboarding')
   }
 
   // Logout
-  const logout = () => {
+  const logout = async () => {
+    setIsLoading(true)
+    try {
+      await logoutAction()
+    } catch (err) {}
+    
     setUser(null)
     localStorage.removeItem('dsa_user')
+    setIsLoading(false)
     router.push('/login')
   }
 
@@ -185,7 +213,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isLoading,
         login,
-        loginWithOAuth,
         logout,
         completeOnboarding,
         updateProfile,

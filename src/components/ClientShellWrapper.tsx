@@ -10,7 +10,11 @@ export default function ClientShellWrapper({ children }: { children: React.React
   const pathname = usePathname()
   const { isLoading } = useAuth()
 
-  const isPublicOrOnboarding = pathname === '/login' || pathname === '/onboarding'
+  const isPublicOrOnboarding = 
+    pathname === '/login' || 
+    pathname === '/signup' || 
+    pathname === '/forgot-password' || 
+    pathname === '/onboarding'
 
   if (isLoading) {
     return (
