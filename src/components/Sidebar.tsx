@@ -17,7 +17,8 @@ import {
   PenTool, 
   Code,
   User,
-  LogOut
+  LogOut,
+  Trophy
 } from 'lucide-react'
 import { useData } from '@/context/DataContext'
 import { useAuth } from '@/context/AuthContext'
@@ -33,6 +34,7 @@ export const Sidebar: React.FC = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+    { name: 'Mission Infosys SP 2027', path: '/mission-infosys-sp-2027', icon: Trophy },
     { name: 'Problems', path: '/problems', icon: Database },
     { name: 'Today\'s Revision', path: '/revision', icon: RefreshCw },
     { name: 'Search Engine', path: '/search', icon: Search },

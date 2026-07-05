@@ -6535,24 +6535,6 @@ async function main() {
     });
   }
 
-  // 3. Seed CS Topics
-  console.log('Seeding CS Topics...');
-  const csTopicsData = [
-    { topicName: 'OOP', resourceLink: 'https://takeuforward.org/oops/oops-concepts-in-one-shot/' },
-    { topicName: 'DBMS', resourceLink: 'https://takeuforward.org/dbms/dbms-complete-playlist-notes/' },
-    { topicName: 'SQL', resourceLink: 'https://takeuforward.org/sql/sql-complete-guide/' },
-    { topicName: 'Operating Systems', resourceLink: 'https://takeuforward.org/os/operating-systems-complete-playlist/' },
-    { topicName: 'Computer Networks', resourceLink: 'https://takeuforward.org/computer-networks/complete-computer-networks-guide/' }
-  ];
-
-  for (const cs of csTopicsData) {
-    await prisma.cSTopic.upsert({
-      where: { topicName: cs.topicName },
-      update: {},
-      create: cs,
-    });
-  }
-
   console.log('Seeding completed successfully!');
 }
 

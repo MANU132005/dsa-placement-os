@@ -134,10 +134,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return
     }
 
+    const userId = user.id
+
     async function loadUserData() {
       setIsSyncing(true)
       try {
-        const res = await fetchUserProgressAction(user.id)
+        const res = await fetchUserProgressAction(userId)
         if (res.success && res.data) {
           const { progress, mistakes, mockOAs: oas, csProgress, interviewJournals: journals, notes } = res.data
 
@@ -226,21 +228,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setPatterns(initialPatterns)
 
           // Load streaks (calculated on-the-fly from actual attempts or mock saved)
-          const storedCurrStrk = localStorage.getItem(`dsa_${user.id}_curr_streak`)
-          const storedLongStrk = localStorage.getItem(`dsa_${user.id}_long_streak`)
+          const storedCurrStrk = localStorage.getItem(`dsa_${userId}_curr_streak`)
+          const storedLongStrk = localStorage.getItem(`dsa_${userId}_long_streak`)
           if (storedCurrStrk) setCurrentStreak(parseInt(storedCurrStrk))
           if (storedLongStrk) setLongestStreak(parseInt(storedLongStrk))
 
           // Load target companies
-          const storedTargets = localStorage.getItem(`dsa_${user.id}_target_companies`)
+          const storedTargets = localStorage.getItem(`dsa_${userId}_target_companies`)
           if (storedTargets) setTargetCompaniesState(JSON.parse(storedTargets))
         } else {
           // DATABASE OFFLINE FALLBACK: load user isolated namespace local storage
-          loadLocalFallback(user.id)
+          loadLocalFallback(userId)
         }
       } catch (err) {
         console.error('Fetch user progress error:', err)
-        loadLocalFallback(user.id)
+        loadLocalFallback(userId)
       } finally {
         setIsSyncing(false)
       }
