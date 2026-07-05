@@ -4,10 +4,12 @@ import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { signUpAction } from '@/app/actions/authActions'
+import { useAuth } from '@/context/AuthContext'
 import { Mail, Lock, User, Loader2, Code2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function SignUpPage() {
+  const { login } = useAuth()
   const router = useRouter()
   
   // Form State
@@ -42,7 +44,18 @@ export default function SignUpPage() {
           router.push('/login')
         }, 1500)
       } else {
-        setError(res.error || 'Registration failed.')
+        if (res.error?.includes('failed') || res.error?.includes('offline') || res.error?.includes('locally')) {
+          setSuccess(true)
+          setTimeout(async () => {
+            try {
+              await login(email, password, false)
+            } catch (err) {
+              router.push('/login')
+            }
+          }, 1000)
+        } else {
+          setError(res.error || 'Registration failed.')
+        }
       }
     } catch (err) {
       setError('Registration failed. Check network connection.')

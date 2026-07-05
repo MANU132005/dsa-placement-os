@@ -3,10 +3,15 @@
 import { prisma } from '@/lib/prisma'
 import { ActionResponse } from './authActions'
 
+const isDummyDb = !process.env.DATABASE_URL || process.env.DATABASE_URL.includes('johndoe')
+
 // 1. Fetch User Data
 export async function fetchUserProgressAction(
   userId: string
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const progress = await prisma.userProgress.findMany({ where: { userId } })
     const mistakes = await prisma.mistakeLog.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } })
@@ -43,6 +48,9 @@ export async function saveAttemptAction(
   notes: string,
   nextRevision: string | null
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const nextRevisionDate = nextRevision ? new Date(nextRevision) : null
     
@@ -99,6 +107,9 @@ export async function addMistakeAction(
   rootCause: string,
   solution: string
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.mistakeLog.create({
       data: {
@@ -123,6 +134,9 @@ export async function toggleMistakeAction(
   reviewed: string,
   reviewDate: string | null
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.mistakeLog.update({
       where: { id },
@@ -151,6 +165,9 @@ export async function addMockOAAction(
   mistakes: string,
   action: string
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.mockOA.create({
       data: {
@@ -182,6 +199,9 @@ export async function updateCSTopicAction(
   confidence: number,
   nextRevision: string | null
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.cSTopicProgress.upsert({
       where: {
@@ -222,6 +242,9 @@ export async function addInterviewAction(
   learnings: string,
   revisionRequired: string
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.interviewJournal.create({
       data: {
@@ -249,6 +272,9 @@ export async function updateUserOnboardingAction(
   dailyGoal: number,
   currentYear: string
 ): Promise<ActionResponse> {
+  if (isDummyDb) {
+    return { success: false, error: 'Database connection offline.' }
+  }
   try {
     const record = await prisma.user.update({
       where: { id: userId },
