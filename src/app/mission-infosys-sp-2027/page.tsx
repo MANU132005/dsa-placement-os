@@ -29,7 +29,8 @@ import {
   Award,
   Video,
   X,
-  MessageSquare
+  MessageSquare,
+  Flag
 } from 'lucide-react'
 import {
   AreaChart,
@@ -144,6 +145,7 @@ export default function MissionInfosysSPDashboard() {
   const [editorialUnlocked, setEditorialUnlocked] = useState<Record<string, boolean>>({}) // questionId -> boolean
   const [questionStartTimes, setQuestionStartTimes] = useState<Record<string, number>>({}) // questionId -> start time timestamp
   const [mockSubmissions, setMockSubmissions] = useState<Record<string, { solved: boolean; score?: number; passedCount?: number }>>({}) // questionId -> status
+  const [flaggedQuestions, setFlaggedQuestions] = useState<Record<string, boolean>>({}) // questionId -> boolean
   const [postMockData, setPostMockData] = useState<{
     mockId: string
     score: number
@@ -435,7 +437,7 @@ export default function MissionInfosysSPDashboard() {
     if (!dbMock) return
     setSelectedMock(dbMock)
     setActiveMockQuestionIndex(0)
-    setMockTimerSeconds(180 * 60)
+    setMockTimerSeconds(125 * 60)
     setMockTimerRunning(true)
     setPostMockData(null)
     
@@ -458,6 +460,7 @@ export default function MissionInfosysSPDashboard() {
     setMockSubmissions(initialSubmissions)
     setHintUnlocked({})
     setEditorialUnlocked({})
+    setFlaggedQuestions({})
   }
 
   const handleUnlockHint = (qId: string) => {
@@ -561,7 +564,7 @@ export default function MissionInfosysSPDashboard() {
         [activeQuestion.id]: {
           solved: isSuccess,
           passedCount,
-          score: isSuccess && !editorialUnlocked[activeQuestion.id] ? 33 : 0
+          score: isSuccess && !editorialUnlocked[activeQuestion.id] ? 25 : 0
         }
       }))
       
@@ -634,10 +637,10 @@ export default function MissionInfosysSPDashboard() {
       const editorialOpened = editorialUnlocked[q.id] || false
       
       if (solved && !editorialOpened) {
-        totalScore += 33.3
-        q.topics.forEach(t => strongTopicsSet.add(t))
+        totalScore += 25
+        q.hiddenTags.forEach(t => strongTopicsSet.add(t))
       } else {
-        q.topics.forEach(t => weakTopicsSet.add(t))
+        q.hiddenTags.forEach(t => weakTopicsSet.add(t))
       }
       
       totalPassed += sub?.passedCount || 0
@@ -646,7 +649,7 @@ export default function MissionInfosysSPDashboard() {
     
     const finalScore = Math.min(100, Math.round(totalScore))
     const finalAccuracy = Math.round((totalPassed / totalTests) * 100) || 0
-    const timeSpent = 180 - Math.round(mockTimerSeconds / 60)
+    const timeSpent = 125 - Math.round(mockTimerSeconds / 60)
     
     // Save to global dashboard state
     const updatedMocks = state.mocks.map(m => {
@@ -1578,10 +1581,10 @@ export default function MissionInfosysSPDashboard() {
               </div>
             )}
 
-            {/* MOCK TESTS TAB */}
+                        {/* MOCK TESTS TAB */}
             {activeTab === 'mocks' && (
               <div className="space-y-6">
-                {/* 1. Post Mock Performance Analysis Dashboard */}
+                {/* 1. Campus Assessment Style Post Mock Analysis Dashboard */}
                 {postMockData && (
                   <motion.div
                     initial={{ opacity: 0, y: 15 }}
@@ -1594,22 +1597,25 @@ export default function MissionInfosysSPDashboard() {
                       <div>
                         <h2 className="text-lg font-bold text-white flex items-center gap-2">
                           <Trophy className="w-5 h-5 text-amber-500" />
-                          <span>Mock Exam Analysis Report</span>
+                          <span>Campus OA Performance Report</span>
                         </h2>
-                        <p className="text-xs text-zinc-400 mt-1">Detailed feedback for {state.mocks.find(m => m.id === postMockData.mockId)?.name}</p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Assessment: {state.mocks.find(m => m.id === postMockData.mockId)?.name}
+                        </p>
                       </div>
                       <button
                         onClick={() => setPostMockData(null)}
                         className="text-xs font-bold border border-zinc-850 hover:bg-zinc-800 text-zinc-300 px-4 py-2 rounded-xl"
                       >
-                        Back to Exams list
+                        Exit Report
                       </button>
                     </div>
 
+                    {/* Telemetry overview */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-zinc-950/60 border border-zinc-850 rounded-2xl p-5 text-center">
                         <span className="text-[10px] text-zinc-500 font-mono font-bold uppercase block">OVERALL SCORE</span>
-                        <p className={`text-4xl font-extrabold font-mono mt-2 ${postMockData.score >= 66 ? 'text-emerald-400' : 'text-amber-500'}`}>
+                        <p className={`text-4xl font-extrabold font-mono mt-2 ${postMockData.score >= 75 ? 'text-emerald-400' : postMockData.score >= 50 ? 'text-amber-500' : 'text-rose-500'}`}>
                           {postMockData.score}/100
                         </p>
                       </div>
@@ -1623,68 +1629,170 @@ export default function MissionInfosysSPDashboard() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Strong Topics (Passed)</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {postMockData.strongTopics.length > 0 ? (
-                            postMockData.strongTopics.map((topic, i) => (
-                              <span key={i} className="text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full">
-                                {topic}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-xs text-zinc-500">None logged. Focus on debugging weak categories.</span>
-                          )}
-                        </div>
-                      </div>
+                    {/* Section metrics */}
+                    <div className="space-y-4 pt-4">
+                      <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Detailed Section Analytics</h3>
+                      <div className="grid grid-cols-1 gap-4">
+                        {(() => {
+                          const dbMock = infosysMockTests.find(m => m.id === postMockData.mockId)
+                          if (!dbMock) return null
+                          return dbMock.questions.map((q, idx) => {
+                            const sub = mockSubmissions[q.id]
+                            const isPassed = sub?.solved || false
+                            const isEditorialOpened = editorialUnlocked[q.id] || false
+                            const finalPassed = isPassed && !isEditorialOpened
 
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Weak Topics (Failed / Opened Editorial)</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {postMockData.weakTopics.length > 0 ? (
-                            postMockData.weakTopics.map((topic, i) => (
-                              <span key={i} className="text-[10px] font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-400 px-3 py-1 rounded-full">
-                                {topic}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-xs text-emerald-400 font-mono">No gaps identified! Excellent coding form.</span>
-                          )}
-                        </div>
+                            return (
+                              <div key={q.id} className="bg-zinc-950/40 border border-zinc-900 rounded-2xl p-5 space-y-4">
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-zinc-900/60">
+                                  <div>
+                                    <span className="text-[9px] text-zinc-500 font-mono font-bold block">{q.section}</span>
+                                    <h4 className="text-sm font-bold text-zinc-200 mt-0.5">Q{idx + 1}: {q.title}</h4>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                                      q.difficulty === 'Easy' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                                      q.difficulty === 'Medium' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                                      'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                    }`}>
+                                      {q.difficulty}
+                                    </span>
+                                    <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded ${
+                                      finalPassed ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                    }`}>
+                                      {finalPassed ? 'PASSED (25 pts)' : isEditorialOpened ? 'FORFEITED (0 pts - Editorial Opened)' : 'FAILED (0 pts)'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
+                                  <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase block">Runtime</span>
+                                    <span className="text-zinc-300">{q.timeComplexity}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase block">Memory</span>
+                                    <span className="text-zinc-300">{q.spaceComplexity}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase block">Test Cases</span>
+                                    <span className="text-zinc-300">Passed {sub?.passedCount || 0}/{q.testCases.length}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-[10px] text-zinc-500 uppercase block">Algorithmic Pattern</span>
+                                    <span className="text-blue-400 font-bold">{q.pattern}</span>
+                                  </div>
+                                </div>
+
+                                {/* Revealed hidden tags */}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] text-zinc-500 font-bold uppercase font-mono">Revealed Tags:</span>
+                                  {q.hiddenTags.map((tag, tIdx) => (
+                                    <span key={tIdx} className="text-[9px] font-semibold bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-0.5 rounded">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+
+                                {/* Accordion solutions */}
+                                <div className="space-y-2 pt-2">
+                                  {/* Editorial details */}
+                                  <details className="group border border-zinc-900 rounded-xl bg-zinc-950/60 overflow-hidden">
+                                    <summary className="flex items-center justify-between p-3 text-xs font-bold text-zinc-400 cursor-pointer hover:bg-zinc-900/40 select-none">
+                                      <span>Optimal Editorial & JavaScript Solver Code</span>
+                                      <ChevronRight className="w-4 h-4 transform group-open:rotate-90 transition-transform" />
+                                    </summary>
+                                    <div className="p-4 border-t border-zinc-900/60 text-xs font-mono text-zinc-300 space-y-3 leading-relaxed">
+                                      <p className="whitespace-pre-line">{q.editorial}</p>
+                                      <div className="bg-zinc-900/40 border border-zinc-850 p-3 rounded-lg overflow-x-auto">
+                                        <pre className="text-[10px] text-emerald-400 whitespace-pre-wrap">{q.optimalSolution}</pre>
+                                      </div>
+                                    </div>
+                                  </details>
+
+                                  {/* Common mistakes */}
+                                  <details className="group border border-zinc-900 rounded-xl bg-zinc-950/60 overflow-hidden">
+                                    <summary className="flex items-center justify-between p-3 text-xs font-bold text-zinc-400 cursor-pointer hover:bg-zinc-900/40 select-none">
+                                      <span>Common Placement Pitfalls & Mistakes</span>
+                                      <ChevronRight className="w-4 h-4 transform group-open:rotate-90 transition-transform" />
+                                    </summary>
+                                    <div className="p-4 border-t border-zinc-900/60 text-xs font-mono text-zinc-300 space-y-1">
+                                      {q.commonMistakes.map((cm, cmIdx) => (
+                                        <div key={cmIdx} className="flex items-start gap-2 text-rose-400">
+                                          <span>•</span>
+                                          <p className="leading-relaxed">{cm}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </details>
+
+                                  {/* Alternative solutions */}
+                                  <details className="group border border-zinc-900 rounded-xl bg-zinc-950/60 overflow-hidden">
+                                    <summary className="flex items-center justify-between p-3 text-xs font-bold text-zinc-400 cursor-pointer hover:bg-zinc-900/40 select-none">
+                                      <span>Alternative Solution Analysis</span>
+                                      <ChevronRight className="w-4 h-4 transform group-open:rotate-90 transition-transform" />
+                                    </summary>
+                                    <div className="p-4 border-t border-zinc-900/60 text-xs font-mono text-zinc-300 leading-relaxed whitespace-pre-line">
+                                      {q.alternativeSolution}
+                                    </div>
+                                  </details>
+
+                                  {/* Related problems */}
+                                  <div className="flex flex-wrap items-center gap-2 text-xs pt-1">
+                                    <span className="text-[10px] text-zinc-500 font-bold uppercase font-mono">Practice More:</span>
+                                    {q.relatedProblems.map((rp, rpIdx) => (
+                                      <a
+                                        key={rpIdx}
+                                        href={rp.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-[11px] text-blue-400 hover:text-blue-300 hover:underline flex items-center gap-1"
+                                      >
+                                        <span>{rp.name}</span>
+                                        <ExternalLink className="w-3 h-3" />
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })
+                        })()}
                       </div>
                     </div>
 
-                    {/* Tomorrow's Goal Generation */}
+                    {/* AI plan block */}
                     <div className="bg-zinc-950/80 border border-zinc-900 rounded-2xl p-5 space-y-3">
                       <div className="flex items-center gap-2">
                         <Sparkles className="w-4 h-4 text-purple-400" />
-                        <span className="text-xs font-bold text-zinc-200">Generated Tomorrow's Mission Plan</span>
+                        <span className="text-xs font-bold text-zinc-200">Next Action Diagnostic Plan</span>
                       </div>
                       <p className="text-xs text-zinc-400 leading-relaxed font-mono">
-                        {postMockData.weakTopics.length > 0 
-                          ? `Action Required: Revise the identified gap topics: ${postMockData.weakTopics.join(', ')} tomorrow. Solve the designated dynamic programming or graph interval cards on Day ${Math.min(5, state.activeDay + 1)}.`
-                          : `Maintain consistency: Solve advanced mock tests 4 or 5 next. Complete outstanding Medium-Hard arrays and BST tree cards.`}
+                        {postMockData.weakTopics.length > 0
+                          ? `Weak categories identified: ${postMockData.weakTopics.join(', ')}. Set these topics as tomorrow's revision targets and review their placement pitfalls.`
+                          : `Perfect scorecard! Move on to the next mock challenge to reinforce graph connectivity and segment trees.`}
                       </p>
                     </div>
                   </motion.div>
                 )}
 
-                {/* 2. Interactive Online Judge View */}
+                {/* 2. Interactive Campus OA Coding Console */}
                 {selectedMock && !postMockData && (
                   <div className="flex flex-col gap-6 relative">
                     
-                    {/* Judge header */}
+                    {/* Top assessment status control bar */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-900 pb-4">
                       <div>
-                        <h2 className="text-base font-bold text-white font-mono">{selectedMock.name}</h2>
-                        <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Timed Coding Round (3 Questions)</span>
+                        <span className="text-[9px] bg-blue-500/10 border border-blue-500/20 text-blue-400 px-2 py-0.5 rounded font-mono font-bold tracking-wider">
+                          CAMPUS PLACEMENT ASSESSMENT CENTER
+                        </span>
+                        <h2 className="text-base font-bold text-white font-mono mt-1">{selectedMock.name}</h2>
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3">
                         {/* Countdown display */}
                         <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 px-4 py-2 rounded-xl font-mono text-sm font-semibold">
-                          <Clock className={`w-4 h-4 ${mockTimerSeconds < 1200 ? 'text-red-500 animate-pulse' : 'text-zinc-400'}`} />
-                          <span className={mockTimerSeconds < 1200 ? 'text-red-400 font-bold' : 'text-zinc-200'}>
+                          <Clock className={`w-4 h-4 ${mockTimerSeconds < 600 ? 'text-red-500 animate-pulse' : 'text-zinc-400'}`} />
+                          <span className={mockTimerSeconds < 600 ? 'text-red-400 font-bold' : 'text-zinc-200'}>
                             {Math.floor(mockTimerSeconds / 3600).toString().padStart(2, '0')}h :{' '}
                             {Math.floor((mockTimerSeconds % 3600) / 60).toString().padStart(2, '0')}m :{' '}
                             {(mockTimerSeconds % 60).toString().padStart(2, '0')}s
@@ -1694,63 +1802,113 @@ export default function MissionInfosysSPDashboard() {
                           onClick={handleAutoSubmitMock}
                           className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl transition-all shadow-md"
                         >
-                          Finish & Submit Exam
+                          Finish & Submit Assessment
                         </button>
                       </div>
                     </div>
 
-                    {/* Judge Split View */}
+                    {/* Section tabs & Controls */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-950/60 border border-zinc-900 rounded-2xl p-4">
+                      <div className="flex items-center gap-4 text-xs font-mono">
+                        <span className="text-zinc-500 uppercase font-bold">Current Section:</span>
+                        <span className="text-zinc-200 font-bold">
+                          {selectedMock.questions[activeMockQuestionIndex]?.section}
+                        </span>
+                      </div>
+                      
+                      {/* Flag and Prev/Next controls */}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => {
+                            const qId = selectedMock.questions[activeMockQuestionIndex]?.id
+                            if (qId) {
+                              setFlaggedQuestions(prev => ({ ...prev, [qId]: !prev[qId] }))
+                            }
+                          }}
+                          className={`text-xs font-mono font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-all ${
+                            flaggedQuestions[selectedMock.questions[activeMockQuestionIndex]?.id]
+                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                              : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Flag className="w-3.5 h-3.5" />
+                          <span>{flaggedQuestions[selectedMock.questions[activeMockQuestionIndex]?.id] ? 'Flagged' : 'Flag for Review'}</span>
+                        </button>
+                        <button
+                          onClick={() => setActiveMockQuestionIndex(prev => Math.max(0, prev - 1))}
+                          disabled={activeMockQuestionIndex === 0}
+                          className="text-xs font-bold border border-zinc-800 hover:bg-zinc-900 disabled:opacity-30 disabled:pointer-events-none text-zinc-300 px-4.5 py-1.5 rounded-lg transition-all"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setActiveMockQuestionIndex(prev => Math.min(3, prev + 1))}
+                          disabled={activeMockQuestionIndex === 3}
+                          className="text-xs font-bold border border-zinc-800 hover:bg-zinc-900 disabled:opacity-30 disabled:pointer-events-none text-zinc-300 px-4.5 py-1.5 rounded-lg transition-all"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Question navigation grid */}
+                    <div className="grid grid-cols-4 gap-2 max-w-md">
+                      {selectedMock.questions.map((q, idx) => {
+                        const isCurrent = activeMockQuestionIndex === idx
+                        const isFlagged = flaggedQuestions[q.id] || false
+                        const hasCode = (userCodes[q.id] || '').length > q.template.length + 10
+                        
+                        let colorClass = 'border-zinc-850 text-zinc-500 bg-zinc-950'
+                        if (isCurrent) colorClass = 'border-blue-500 text-blue-400 bg-blue-500/5 ring-1 ring-blue-500/20'
+                        else if (isFlagged) colorClass = 'border-amber-500 text-amber-400 bg-amber-500/5'
+                        else if (hasCode) colorClass = 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+
+                        return (
+                          <button
+                            key={q.id}
+                            onClick={() => setActiveMockQuestionIndex(idx)}
+                            className={`flex flex-col items-center justify-center p-3 rounded-xl border text-center transition-all ${colorClass}`}
+                          >
+                            <span className="text-[10px] font-bold font-mono">Q{idx + 1}</span>
+                            <span className="text-[8px] font-mono text-zinc-500 mt-0.5 truncate max-w-full">
+                              {q.difficulty}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Split View */}
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
                       
-                      {/* Left: Problem Details (5 columns) */}
+                      {/* Left: Problem Details */}
                       <div className="lg:col-span-5 bg-zinc-900/30 border border-zinc-900 rounded-3xl p-5 space-y-5 flex flex-col max-h-[80vh] overflow-y-auto">
-                        
-                        {/* Tabs controller for question list */}
-                        <div className="flex items-center gap-1.5 border-b border-zinc-850 pb-3">
-                          {selectedMock.questions.map((q, idx) => {
-                            const isSubmitted = mockSubmissions[q.id]?.solved || false
-                            return (
-                              <button
-                                key={q.id}
-                                onClick={() => setActiveMockQuestionIndex(idx)}
-                                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all border ${
-                                  activeMockQuestionIndex === idx
-                                    ? 'bg-zinc-800 border-zinc-700 text-white'
-                                    : 'border-transparent text-zinc-400 hover:text-zinc-300'
-                                }`}
-                              >
-                                {isSubmitted && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />}
-                                <span>Q{idx + 1} ({q.difficulty})</span>
-                              </button>
-                            )
-                          })}
-                        </div>
-
-                        {/* Active Question Info */}
                         {(() => {
                           const q = selectedMock.questions[activeMockQuestionIndex]
+                          if (!q) return null
                           return (
                             <div className="space-y-4 flex-1">
-                              <div className="flex items-center justify-between">
-                                <h3 className="text-base font-bold text-zinc-100">{q.title}</h3>
+                              <div className="flex items-center justify-between pb-2 border-b border-zinc-900/60">
+                                <div>
+                                  <span className="text-[9px] text-zinc-500 font-mono font-bold block">{q.section}</span>
+                                  <h3 className="text-base font-bold text-zinc-100">{q.title}</h3>
+                                </div>
                                 <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                                  q.difficulty === 'Easy' 
-                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                                    : q.difficulty === 'Medium' 
-                                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                    : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                  q.difficulty === 'Easy' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                                  q.difficulty === 'Medium' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                                  'bg-rose-500/10 border-rose-500/20 text-rose-400'
                                 }`}>
                                   {q.difficulty}
                                 </span>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono text-zinc-500">
-                                <span>Pattern: {q.pattern}</span>
+                                <span>Algorithmic Pattern: [REVEALED AFTER SUBMISSION]</span>
                                 <span>&bull;</span>
-                                <span>Time limit: {q.expectedTime} min</span>
+                                <span>Target: {q.expectedTime} min</span>
                               </div>
 
-                              {/* Story Description */}
+                              {/* Story */}
                               <div className="space-y-2">
                                 <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Problem Statement</h4>
                                 <p className="text-xs text-zinc-300 leading-relaxed font-mono whitespace-pre-line">{q.story}</p>
@@ -1762,7 +1920,7 @@ export default function MissionInfosysSPDashboard() {
                                 <pre className="bg-zinc-950 border border-zinc-900 rounded-xl p-3 text-[11px] font-mono text-rose-400 leading-relaxed">{q.constraints}</pre>
                               </div>
 
-                              {/* Input / Output Format */}
+                              {/* IO format */}
                               <div className="grid grid-cols-2 gap-3 text-xs">
                                 <div className="space-y-1">
                                   <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Input format</h4>
@@ -1794,12 +1952,11 @@ export default function MissionInfosysSPDashboard() {
 
                               {/* Hints and Editorial */}
                               <div className="border-t border-zinc-900 pt-4 space-y-3">
-                                {/* Hints */}
                                 <div>
                                   {hintUnlocked[q.id] ? (
                                     <div className="bg-amber-500/5 border border-amber-500/10 rounded-xl p-3 text-[11px] text-amber-500 font-mono leading-relaxed">
                                       <span className="font-bold block mb-1">HINT:</span>
-                                      Review patterns involving {q.pattern}. Check edge cases like: {q.edgeCases.join(', ')}.
+                                      Check logic guidelines. Avoid edge cases. Target complexity should be {q.timeComplexity}.
                                     </div>
                                   ) : (
                                     <button
@@ -1807,17 +1964,14 @@ export default function MissionInfosysSPDashboard() {
                                       className="text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-500 border border-amber-500/25 px-3 py-1.5 rounded-lg flex items-center gap-1"
                                     >
                                       <Lightbulb className="w-3.5 h-3.5" />
-                                      <span>Reveal Hint (Will mark review status Orange)</span>
+                                      <span>Reveal Hint (Status Orange review flag)</span>
                                     </button>
                                   )}
                                 </div>
 
-                                {/* Editorial */}
                                 <div>
                                   {editorialUnlocked[q.id] ? (
                                     <div className="bg-zinc-950 border border-zinc-900 rounded-xl p-3 space-y-2 text-[11px] font-mono text-zinc-300">
-                                      <span className="font-bold text-zinc-400 block mb-1">EDITORIAL OUTLINE:</span>
-                                      <p className="leading-relaxed mb-2">{q.editorial}</p>
                                       <span className="font-bold text-zinc-400 block mb-1">OPTIMAL SOLUTION (JS):</span>
                                       <pre className="bg-zinc-900/50 p-2.5 rounded-lg border border-zinc-850 text-[10px] text-zinc-400 overflow-x-auto whitespace-pre-wrap">{q.optimalSolution}</pre>
                                     </div>
@@ -1837,15 +1991,14 @@ export default function MissionInfosysSPDashboard() {
                         })()}
                       </div>
 
-                      {/* Right: Code Compiler Editor (7 columns) */}
+                      {/* Right: Code Compiler Editor */}
                       {(() => {
                         const q = selectedMock.questions[activeMockQuestionIndex]
+                        if (!q) return null
                         const codeVal = userCodes[q.id] || ''
                         const outputVal = consoleOutputs[q.id] || ''
                         return (
                           <div className="lg:col-span-7 flex flex-col gap-4">
-                            
-                            {/* Editor control header */}
                             <div className="flex items-center justify-between bg-zinc-900/30 border border-zinc-900 rounded-2xl px-4 py-2.5">
                               <div className="flex items-center gap-3">
                                 <label className="text-[10px] text-zinc-500 font-mono uppercase">LANGUAGE:</label>
@@ -1863,7 +2016,6 @@ export default function MissionInfosysSPDashboard() {
                               <span className="text-[10px] text-zinc-500 font-mono font-medium">TEMPLATE READY</span>
                             </div>
 
-                            {/* Textarea Editor */}
                             <div className="flex-1 min-h-[300px] bg-zinc-950 border border-zinc-900 rounded-3xl p-4 flex flex-col font-mono relative">
                               <textarea
                                 value={codeVal}
@@ -1886,7 +2038,6 @@ export default function MissionInfosysSPDashboard() {
                               />
                             </div>
 
-                            {/* Compiler buttons */}
                             <div className="flex justify-between items-center gap-3">
                               <button
                                 onClick={() => setUserCodes(prev => ({ ...prev, [q.id]: q.template }))}
@@ -1913,7 +2064,6 @@ export default function MissionInfosysSPDashboard() {
                               </div>
                             </div>
 
-                            {/* Output console log */}
                             <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-4 min-h-[140px] flex flex-col font-mono text-[11px] relative overflow-hidden">
                               <div className="flex items-center justify-between border-b border-zinc-900 pb-2 mb-2">
                                 <span className="text-[10px] text-zinc-500 uppercase font-bold">TERMINAL OUTPUT LOG</span>
@@ -1928,13 +2078,16 @@ export default function MissionInfosysSPDashboard() {
                   </div>
                 )}
 
-                {/* 3. Standard Mocks List selection */}
+                {/* 3. Corporate Campus Mock Exams Index list */}
                 {!selectedMock && !postMockData && (
                   <div className="space-y-6">
-                    <div className="bg-zinc-900/30 border border-zinc-900 rounded-2xl p-6 space-y-2">
-                      <h2 className="text-sm font-bold tracking-wider text-zinc-400 uppercase">Infosys SP Standard Mock Exams</h2>
-                      <p className="text-xs text-zinc-500">
-                        10 original mocks designed to evaluate dynamic programming, graph schemas, topological dependencies, and sorting combinations.
+                    <div className="bg-zinc-900/30 border border-zinc-900 rounded-2xl p-6 space-y-2 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
+                      <h2 className="text-sm font-bold tracking-wider text-zinc-400 uppercase font-mono">
+                        CAMPUS CODING ASSESSMENT PORTAL (10 EXAMS)
+                      </h2>
+                      <p className="text-xs text-zinc-500 max-w-3xl leading-relaxed">
+                        Simulate the strict environment of campus coding OA rounds. Every exam has exactly 3 sections: Section 1 (1 Easy, 20m), Section 2 (2 Medium, 60m), and Section 3 (1 Hard, 45m). Solve questions under strict time limits to test pattern-recognition skills.
                       </p>
                     </div>
 
@@ -1943,26 +2096,27 @@ export default function MissionInfosysSPDashboard() {
                         const dbMock = infosysMockTests[idx]
                         const isSolved = mock.solved
                         return (
-                          <div key={mock.id} className="bg-zinc-900/30 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4">
+                          <div key={mock.id} className="bg-zinc-900/30 border border-zinc-900 rounded-2xl p-5 flex flex-col justify-between gap-4 hover:border-zinc-800 transition-all">
                             <div>
                               <div className="flex items-center justify-between">
-                                <h3 className="text-xs font-bold text-zinc-400 uppercase font-mono">Mock Exam {idx + 1}</h3>
+                                <span className="text-[10px] font-bold text-zinc-400 uppercase font-mono">Mock Assessment {idx + 1}</span>
                                 {isSolved && (
-                                  <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-medium">
+                                  <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider">
                                     COMPLETED
                                   </span>
                                 )}
                               </div>
                               <h3 className="text-sm font-bold text-zinc-200 mt-1">{mock.name}</h3>
-                              <p className="text-[10px] text-zinc-500 font-mono mt-1">3 Coding Questions &bull; 180 Minutes limit</p>
+                              <p className="text-[10px] text-zinc-500 font-mono mt-1">4 Coding Problems &bull; 125 Minutes limit &bull; 3 Section Splits</p>
                               
-                              {/* Display problems details if loaded from database */}
+                              {/* Display problems details title-only to maintain realism */}
                               {dbMock && (
-                                <div className="mt-3 flex flex-wrap gap-1">
+                                <div className="mt-3 flex flex-col gap-1.5 border-t border-zinc-900/40 pt-3">
                                   {dbMock.questions.map((q, qidx) => (
-                                    <span key={q.id} className="text-[9px] bg-zinc-950 border border-zinc-900 text-zinc-400 px-2 py-0.5 rounded font-mono">
-                                      Q{qidx+1}: {q.title} ({q.difficulty})
-                                    </span>
+                                    <div key={q.id} className="flex items-center justify-between text-[10.5px] font-mono text-zinc-400 bg-zinc-950/60 border border-zinc-900 px-2.5 py-1 rounded-lg">
+                                      <span className="truncate max-w-[200px]">Q{qidx+1}: {q.title}</span>
+                                      <span className="text-[9px] text-zinc-500">{q.difficulty}</span>
+                                    </div>
                                   ))}
                                 </div>
                               )}
@@ -1981,7 +2135,7 @@ export default function MissionInfosysSPDashboard() {
                                   </div>
                                 </div>
                               ) : (
-                                <span className="text-xs text-zinc-500 font-mono">Status: Pending</span>
+                                <span className="text-xs text-zinc-500 font-mono">Status: Locked / Pending</span>
                               )}
 
                               <div className="flex gap-2">
@@ -1989,23 +2143,24 @@ export default function MissionInfosysSPDashboard() {
                                   <button
                                     onClick={() => {
                                       // Review results by loading postMockData
+                                      const mockResults = state.mocks.find(m => m.id === mock.id)
                                       setPostMockData({
                                         mockId: mock.id,
-                                        score: mock.score || 0,
-                                        accuracy: mock.accuracy || 0,
-                                        timeTaken: mock.timeTaken || 120,
-                                        weakTopics: dbMock ? dbMock.questions.map(q => q.topics).flat() : ['DP'],
+                                        score: mockResults?.score || 0,
+                                        accuracy: mockResults?.accuracy || 0,
+                                        timeTaken: mockResults?.timeTaken || 90,
+                                        weakTopics: dbMock ? dbMock.questions.map(q => q.hiddenTags).flat() : ['DP'],
                                         strongTopics: []
                                       })
                                     }}
-                                    className="text-[10px] font-bold border border-zinc-800 hover:bg-zinc-900 text-zinc-300 px-3 py-2 rounded-xl transition-all"
+                                    className="text-[10px] font-bold border border-zinc-800 hover:bg-zinc-900 text-zinc-300 px-3 py-2 rounded-xl transition-all font-mono"
                                   >
-                                    Review Stats
+                                    Review Report
                                   </button>
                                 )}
                                 <button
                                   onClick={() => handleStartMockExam(mock.id)}
-                                  className="text-[10px] font-bold bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl transition-all"
+                                  className="text-[10px] font-bold bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/20 px-4 py-2 rounded-xl transition-all font-mono"
                                 >
                                   {isSolved ? 'Retake Exam' : 'Start Exam'}
                                 </button>
@@ -2020,7 +2175,7 @@ export default function MissionInfosysSPDashboard() {
               </div>
             )}
 
-            {/* PREP JOURNAL TAB */}
+{/* PREP JOURNAL TAB */}
             {activeTab === 'notes' && (
               <div className="bg-zinc-900/30 border border-zinc-900 rounded-2xl p-6 space-y-4">
                 <div>
